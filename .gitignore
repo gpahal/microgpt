@@ -33,6 +33,10 @@ coverage.xml
 .mypy_cache
 .ruff_cache
 
+# Log files
+*.log
+nohup.out
+
 # Temporary files
 tmp
 .tmp
