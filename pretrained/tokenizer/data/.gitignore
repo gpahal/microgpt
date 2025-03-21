@@ -1,0 +1,4 @@
+# Include model files
+!*.model
+!*.vocab
+!*.pt
