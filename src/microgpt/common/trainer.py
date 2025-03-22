@@ -195,7 +195,7 @@ class _AbstractTrainer[TReturn, TRunContext](abc.ABC):
 
         import aiofiles
 
-        params_file_path = os.path.join(dir_path, f"{self._name}_trainer_params.json")
+        params_file_path = os.path.join(dir_path, f"{self._name}_trainer.json")
         self._logger.info(f"Saving {self._name} trainer params: file_path={params_file_path}")
         abstract_params = _AbstractTrainerParams(
             name=self._name,
@@ -353,7 +353,7 @@ class _AbstractTrainer[TReturn, TRunContext](abc.ABC):
 
         latest_iteration_checkpoint_dir_path = iteration_checkpoint_dir_paths[-1]
         params_file_path = os.path.join(
-            latest_iteration_checkpoint_dir_path, f"{params.name}_trainer_params.json"
+            latest_iteration_checkpoint_dir_path, f"{params.name}_trainer.json"
         )
         logger.info(
             f"Loading checkpointed {params.name} trainer params: file_path={params_file_path}"
