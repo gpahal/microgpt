@@ -6,15 +6,13 @@ import pytest_asyncio
 from tiktoken import get_encoding
 
 from microgpt import (
-    GPTTokenizer,
+    NonCheckpointedTokenizerTrainerConfig,
+    PretrainedGPTTokenizerConfig,
     PretrainedTokenizerConfig,
     TextDataSource,
     Tokenizer,
-    UntrainedTokenizerConfig,
-)
-from microgpt.tokenizer.tokenizer_trainer import (
-    NonCheckpointedTokenizerTrainerConfig,
     TokenizerTrainer,
+    UntrainedTokenizerConfig,
 )
 
 FILE_TEXT_PREFIX = "FILE:"
@@ -66,7 +64,7 @@ async def trained_tokenizer():
 
 @pytest.mark.asyncio(loop_scope="module")
 async def test_vocab_size(trained_tokenizer: Tokenizer):
-    assert trained_tokenizer._vocab_size == TRAINED_TOKENIZER_VOCAB_SIZE
+    assert trained_tokenizer.vocab_size == TRAINED_TOKENIZER_VOCAB_SIZE
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -76,8 +74,12 @@ async def test_save_and_load(trained_tokenizer: Tokenizer):
     with tempfile.TemporaryDirectory() as tmp_dir_path:
         dir_path = os.path.join(tmp_dir_path, "test_tokenizer")
         await trained_tokenizer.save(dir_path)
-        tokenizer = await Tokenizer._load_pretrained(dir_path)
-        assert tokenizer._vocab_size == TRAINED_TOKENIZER_VOCAB_SIZE
+        with open(os.path.join(dir_path, "tokenizer.json")) as f:
+            tokenizer_contents = f.read()
+            print(f"tokenizer_contents: {tokenizer_contents}")
+        print(f"trained_tokenizer: {trained_tokenizer}")
+        tokenizer = await Tokenizer.load(config=PretrainedTokenizerConfig(dir_path=dir_path))
+        assert tokenizer.vocab_size == TRAINED_TOKENIZER_VOCAB_SIZE
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -128,7 +130,9 @@ GPT_ENCODING_MAPPINGS = [
 @pytest.mark.parametrize("text", SAMPLE_TEXTS)
 async def test_gpt_tokenizer(mapping: GPTEncodingMapping, text: str):
     text = unpack_text(text)
-    microgpt_gpt_tokenizer = await GPTTokenizer._load_pretrained(mapping.microgpt_gpt_encoding)
+    microgpt_gpt_tokenizer = await Tokenizer.load(
+        config=PretrainedGPTTokenizerConfig(encoding_or_model_name=mapping.microgpt_gpt_encoding)
+    )
     tiktoken_tokenizer = get_encoding(mapping.tiktoken_encoding)
     microgpt_ids = microgpt_gpt_tokenizer.encode(text)
     tiktoken_ids = tiktoken_tokenizer.encode(text)
@@ -141,7 +145,9 @@ async def test_gpt_tokenizer(mapping: GPTEncodingMapping, text: str):
 @pytest.mark.parametrize("mapping", GPT_ENCODING_MAPPINGS)
 async def test_gpt_tokenizer_special_tokens(mapping: GPTEncodingMapping):
     text = unpack_text(SAMPLE_SPECIAL_TOKENS_TEXT)
-    microgpt_gpt_tokenizer = await GPTTokenizer._load_pretrained(mapping.microgpt_gpt_encoding)
+    microgpt_gpt_tokenizer = await Tokenizer.load(
+        config=PretrainedGPTTokenizerConfig(encoding_or_model_name=mapping.microgpt_gpt_encoding)
+    )
     tiktoken_tokenizer = get_encoding(mapping.tiktoken_encoding)
     microgpt_ids = microgpt_gpt_tokenizer.encode(text, allowed_special_tokens="all")
     tiktoken_ids = tiktoken_tokenizer.encode(text, allowed_special="all")

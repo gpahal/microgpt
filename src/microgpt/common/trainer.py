@@ -57,18 +57,6 @@ class _AbstractTrainer[TReturn, TRunContext](abc.ABC):
         self._ensure_output_dir_path()
         self._ensure_checkpoint_dir_path()
 
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def iteration(self) -> int:
-        return self._iteration
-
-    @property
-    def latest_run_iteration(self) -> int:
-        return self._latest_run_iteration
-
     def __str__(self) -> str:
         return (
             "AbstractTrainer(\n"
@@ -80,9 +68,20 @@ class _AbstractTrainer[TReturn, TRunContext](abc.ABC):
             ")"
         )
 
-    @property
     def __repr__(self) -> str:
         return self.__str__()
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def iteration(self) -> int:
+        return self._iteration
+
+    @property
+    def latest_run_iteration(self) -> int:
+        return self._latest_run_iteration
 
     def is_checkpointing_enabled(self) -> bool:
         return self._checkpointing_config is not None

@@ -94,14 +94,6 @@ class TokenizerTrainer(_AbstractTrainer[Tokenizer, TokenizerTrainerRunContext]):
             params.data_sources if isinstance(params.data_sources, list) else [params.data_sources]
         )
 
-    @property
-    def tokenizer(self) -> Tokenizer:
-        return self._tokenizer
-
-    @property
-    def vocab_size(self) -> int:
-        return self._vocab_size
-
     def _init_vocab_size(self, vocab_size: int) -> None:
         self._vocab_size = vocab_size
         if self._vocab_size < 256:
@@ -127,6 +119,14 @@ class TokenizerTrainer(_AbstractTrainer[Tokenizer, TokenizerTrainerRunContext]):
             ")"
         )
 
+    @property
+    def tokenizer(self) -> Tokenizer:
+        return self._tokenizer
+
+    @property
+    def vocab_size(self) -> int:
+        return self._vocab_size
+
     def _get_params(self) -> BaseModel:
         return _TokenizerTrainerParams(
             vocab_size=self._vocab_size,
@@ -144,7 +144,7 @@ class TokenizerTrainer(_AbstractTrainer[Tokenizer, TokenizerTrainerRunContext]):
         num_merges = self._vocab_size - self._tokenizer.vocab_size
 
         # Some merges already exist, so we need to merge the inputs before training again
-        existing_merges_count = len(self._tokenizer._merges)
+        existing_merges_count = len(self._tokenizer._merges_dict)
         inputs_need_merging = existing_merges_count > 0
 
         self._logger.info(
@@ -217,11 +217,11 @@ class TokenizerTrainer(_AbstractTrainer[Tokenizer, TokenizerTrainerRunContext]):
         )
 
         # Save the merge
-        self._tokenizer._merges[pair] = new_idx
+        self._tokenizer._merges.append(list(pair) + [new_idx])
+        self._tokenizer._merges_dict[pair] = new_idx
         self._tokenizer._vocab[new_idx] = (
             self._tokenizer._vocab[pair[0]] + self._tokenizer._vocab[pair[1]]
         )
-        self._tokenizer._vocab_size = len(self._tokenizer._vocab)
         return True
 
     async def _get_return_value(self, run_context: TokenizerTrainerRunContext) -> Tokenizer:

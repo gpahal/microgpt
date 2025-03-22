@@ -29,65 +29,65 @@ def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
 
 
 DATA_SOURCES = [
-    # DatasetDataSource(
-    #     name="wikipedia",
-    #     params=DatasetParams(
-    #         path="wikimedia/wikipedia",
-    #         subset="20231101.en",
-    #         split="train",
-    #     ),
-    #     batch_size=1000,
-    #     max_length=75000,
-    # ),
-    # DatasetDataSource(
-    #     name="fineweb",
-    #     params=DatasetParams(
-    #         path="HuggingFaceFW/fineweb",
-    #         subset="sample-10BT",
-    #         split="train",
-    #     ),
-    #     batch_size=1000,
-    #     max_length=125000,
-    # ),
-    # DatasetDataSource(
-    #     name="yahoo_answers_topics",
-    #     params=DatasetParams(
-    #         path="community-datasets/yahoo_answers_topics",
-    #         split="train",
-    #         field="best_answer",
-    #     ),
-    #     batch_size=5000,
-    #     max_length=300000,
-    # ),
-    # DatasetDataSource(
-    #     name="amazon_polarity",
-    #     params=DatasetParams(
-    #         path="fancyzhx/amazon_polarity",
-    #         split="train",
-    #         field="content",
-    #     ),
-    #     batch_size=5000,
-    #     max_length=300000,
-    # ),
-    # DatasetDataSource(
-    #     name="imdb",
-    #     params=DatasetParams(
-    #         path="stanfordnlp/imdb",
-    #         split="train",
-    #     ),
-    #     batch_size=5000,
-    #     max_length=300000,
-    # ),
-    # DatasetDataSource(
-    #     name="python-codes-25k",
-    #     params=DatasetParams(
-    #         path="flytech/python-codes-25k",
-    #         split="train",
-    #         field="output",
-    #     ),
-    #     batch_size=1000,
-    #     max_length=50000,
-    # ),
+    DatasetDataSource(
+        name="wikipedia",
+        params=DatasetParams(
+            path="wikimedia/wikipedia",
+            subset="20231101.en",
+            split="train",
+        ),
+        batch_size=1000,
+        max_length=75000,
+    ),
+    DatasetDataSource(
+        name="fineweb",
+        params=DatasetParams(
+            path="HuggingFaceFW/fineweb",
+            subset="sample-10BT",
+            split="train",
+        ),
+        batch_size=1000,
+        max_length=125000,
+    ),
+    DatasetDataSource(
+        name="yahoo_answers_topics",
+        params=DatasetParams(
+            path="community-datasets/yahoo_answers_topics",
+            split="train",
+            field="best_answer",
+        ),
+        batch_size=5000,
+        max_length=300000,
+    ),
+    DatasetDataSource(
+        name="amazon_polarity",
+        params=DatasetParams(
+            path="fancyzhx/amazon_polarity",
+            split="train",
+            field="content",
+        ),
+        batch_size=5000,
+        max_length=300000,
+    ),
+    DatasetDataSource(
+        name="imdb",
+        params=DatasetParams(
+            path="stanfordnlp/imdb",
+            split="train",
+        ),
+        batch_size=5000,
+        max_length=300000,
+    ),
+    DatasetDataSource(
+        name="python-codes-25k",
+        params=DatasetParams(
+            path="flytech/python-codes-25k",
+            split="train",
+            field="output",
+        ),
+        batch_size=1000,
+        max_length=50000,
+    ),
     DatasetDataSource(
         name="awesome-chatgpt-prompts",
         params=DatasetParams(
@@ -105,6 +105,7 @@ async def train(
     vocab_size: int,
     include_eot: bool = True,
     eot_id: int | None = None,
+    checkpointing_iterations_interval: int | None = None,
 ):
     if vocab_size == 257 and include_eot:
         logger.info("Vocabulary size is 257 and end-of-text token is included, skipping training")
@@ -118,6 +119,10 @@ async def train(
         eot_id=eot_id if include_eot else None,
     )
 
+    if checkpointing_iterations_interval is None:
+        checkpointing_iterations_interval = min(100, max(10, vocab_size // 50))
+        logger.info(f"Checkpointing iterations interval: {checkpointing_iterations_interval}")
+
     dirname = os.path.dirname(os.path.abspath(__file__))
     tokenizer_trainer = await TokenizerTrainer.load(
         config=CheckpointedTokenizerTrainerConfig(
@@ -126,7 +131,7 @@ async def train(
             data_sources=DATA_SOURCES,
             output_dir_path=os.path.join(dirname, "trained_tokenizer/output"),
             checkpointing_config=TrainerCheckpointingConfig(
-                checkpointing_iterations_interval=10,
+                checkpointing_iterations_interval=checkpointing_iterations_interval,
                 checkpoint_dir_path=os.path.join(dirname, "trained_tokenizer/checkpoints"),
             ),
         ),
@@ -161,14 +166,29 @@ def main(
         int | None,
         typer.Option(
             "--eot-id",
-            help="The id of the end-of-text token. If include_eot is False, this option is ignored. If include_eot is True and this option is not provided, the (vocab size - 1) is used as the end-of-text token id.",
+            help="The id of the end-of-text token. If include_eot is False, this option is ignored. If include_eot is True and this option is not provided, the (vocab size - 1) is used as the end-of-text token id",
+        ),
+    ] = None,
+    checkpointing_iterations_interval: Annotated[
+        int | None,
+        typer.Option(
+            "--checkpointing-iterations-interval",
+            help="The number of iterations between checkpoints. If not provided, it is set to min(100, max(10, vocab_size // 50))",
+            min=1,
         ),
     ] = None,
 ) -> None:
     """
     Train a tokenizer. Save the tokenizer to the pretrained/tokenizer/data_new directory.
     """
-    _run_async(train(vocab_size=vocab_size, include_eot=include_eot, eot_id=eot_id))
+    _run_async(
+        train(
+            vocab_size=vocab_size,
+            include_eot=include_eot,
+            eot_id=eot_id,
+            checkpointing_iterations_interval=checkpointing_iterations_interval,
+        )
+    )
 
 
 if __name__ == "__main__":

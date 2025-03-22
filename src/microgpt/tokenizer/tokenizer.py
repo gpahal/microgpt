@@ -85,9 +85,9 @@ class Tokenizer:
     _special_tokens: dict[str, int]
     _inverse_special_tokens: dict[int, str]
     _eot_id: int | None
-    _merges: dict[tuple[int, int], int]
+    _merges: list[list[int]]
+    _merges_dict: dict[tuple[int, int], int]
     _vocab: dict[int, bytes]
-    _vocab_size: int
 
     def __init__(
         self,
@@ -113,9 +113,7 @@ class Tokenizer:
         self._eot_id = params.eot_id
         if self._eot_id is not None:
             assert self._special_tokens and self._eot_id in self._special_tokens.values()
-        self._merges = (
-            {tuple(merge[0:2]): merge[2] for merge in params.merges} if params.merges else {}
-        )
+        self._init_merges(params.merges)
         self._init_vocab()
 
     def _init_split_pattern(self, split_pattern: str | None = None) -> None:
@@ -126,22 +124,17 @@ class Tokenizer:
         self._special_tokens = {} if special_tokens is None else special_tokens
         self._inverse_special_tokens = {v: k for k, v in self._special_tokens.items()}
 
+    def _init_merges(self, merges: list[list[int]] | None = None) -> None:
+        self._merges = merges if merges is not None else []
+        self._merges_dict = {tuple(merge[0:2]): merge[2] for merge in self._merges}
+
     def _init_vocab(self) -> None:
         vocab = {idx: bytes([idx]) for idx in range(256)}
-        for (p0, p1), idx in self._merges.items():
+        for (p0, p1), idx in self._merges_dict.items():
             vocab[idx] = vocab[p0] + vocab[p1]
         for special, idx in self._special_tokens.items():
             vocab[idx] = special.encode("utf-8")
         self._vocab = vocab
-        self._vocab_size = len(vocab)
-
-    def _get_params(self) -> _TokenizerParams:
-        return _TokenizerParams(
-            split_pattern=self._split_pattern,
-            special_tokens=self._special_tokens,
-            eot_id=self._eot_id,
-            merges=[[pair[0], pair[1], id] for pair, id in self._merges.items()],
-        )
 
     def __str__(self) -> str:
         return (
@@ -149,7 +142,7 @@ class Tokenizer:
             f"  split_pattern={self._split_pattern}\n"
             f"  special_tokens={self._special_tokens if self._special_tokens else 'None'}\n"
             f"  eot_id={self._eot_id if self._eot_id is not None else 'None'}\n"
-            f"  merges_size={len(self._merges if hasattr(self, '_merges') and self._merges else {})}\n"
+            f"  merges_size={len(self._merges_dict if hasattr(self, '_merges') and self._merges_dict else {})}\n"
             f"  vocab_size={len(self._vocab if hasattr(self, '_vocab') and self._vocab else {})}\n"
             ")"
         )
@@ -159,11 +152,19 @@ class Tokenizer:
 
     @property
     def vocab_size(self) -> int:
-        return self._vocab_size
+        return len(self._vocab)
 
     @property
     def eot_id(self) -> int | None:
         return self._eot_id
+
+    def _get_params(self) -> _TokenizerParams:
+        return _TokenizerParams(
+            split_pattern=self._split_pattern,
+            special_tokens=self._special_tokens,
+            eot_id=self._eot_id,
+            merges=self._merges,
+        )
 
     def add_special_tokens(self, special_tokens: dict[str, int]) -> None:
         """
@@ -217,9 +218,9 @@ class Tokenizer:
         ids = np.array(ids, dtype=np.int32)
         while len(ids) >= 2:
             # Find the pair with the lowest merge index
-            pair = min(counts_dict, key=lambda p: self._merges.get(p, float("inf")))
+            pair = min(counts_dict, key=lambda p: self._merges_dict.get(p, float("inf")))
             # Otherwise, let's merge the best pair (lowest merge index)
-            new_idx = self._merges.get(pair, None)
+            new_idx = self._merges_dict.get(pair, None)
             if new_idx is None:
                 # Nothing else can be merged anymore
                 break
@@ -343,7 +344,7 @@ class Tokenizer:
         # Write the vocab: for human inspection only
         vocab_file_path = os.path.join(dir_path, "tokenizer_vocab.json")
         self._logger.info(f"Saving tokenizer vocab: file_path={vocab_file_path}")
-        inverted_merges = {idx: pair for pair, idx in self._merges.items()}
+        inverted_merges = {idx: pair for pair, idx in self._merges_dict.items()}
         vocab_json = {}
         indices = list(self._vocab.keys())
         indices.sort()
@@ -429,11 +430,11 @@ class Tokenizer:
                     )
 
                 # Check if the vocabulary matches or is a subset
-                if self._vocab_size < other_tokenizer._vocab_size:
+                if self.vocab_size < other_tokenizer.vocab_size:
                     raise ValueError(
                         "Tokenizer vocabulary size is less than expected: "
-                        f"expected_vocab_size={other_tokenizer._vocab_size}, "
-                        f"actual_vocab_size={self._vocab_size}"
+                        f"expected_vocab_size={other_tokenizer.vocab_size}, "
+                        f"actual_vocab_size={self.vocab_size}"
                     )
                 for idx in other_tokenizer._vocab:
                     if idx not in self._vocab:
@@ -550,7 +551,7 @@ class _GPTTokenizerParams(BaseModel):
     encoding: _GPTTokenizerEncoding
     config: _GPTTokenizerConfig
     mergeable_ranks: dict[bytes, int]
-    merges: dict[tuple[int, int], int]
+    merges: list[list[int]]
 
 
 class GPTTokenizer(Tokenizer):
@@ -595,9 +596,9 @@ class GPTTokenizer(Tokenizer):
             ),
         )
 
-        if self._config.vocab_size is not None:
-            assert self._config.vocab_size == len(self._vocab), (
-                f"Vocabulary size mismatch: {self._config.vocab_size} != {len(self._vocab)}"
+        if params.config.vocab_size is not None:
+            assert params.config.vocab_size == len(self._vocab), (
+                f"Vocabulary size mismatch: {params.config.vocab_size} != {len(self._vocab)}"
             )
 
         self._encoding = params.encoding
@@ -612,6 +613,9 @@ class GPTTokenizer(Tokenizer):
     def _get_params(self) -> _GPTTokenizerParams:
         return _GPTTokenizerParams(
             encoding_name=self._encoding.value,
+            config=self._config,
+            mergeable_ranks=self._mergeable_ranks,
+            merges=self._merges,
         )
 
     def __str__(self) -> str:
@@ -621,7 +625,7 @@ class GPTTokenizer(Tokenizer):
             f"  special_tokens={self._special_tokens}\n"
             f"  eot_id={self._eot_id if self._eot_id is not None else 'None'}\n"
             f"  mergeable_ranks_size={len(self._mergeable_ranks) if hasattr(self, '_mergeable_ranks') and self._mergeable_ranks else 0}\n"
-            f"  merges_size={len(self._merges) if hasattr(self, '_merges') and self._merges else 0}\n"
+            f"  merges_size={len(self._merges_dict) if hasattr(self, '_merges') and self._merges_dict else 0}\n"
             f"  vocab_size={len(self._vocab) if hasattr(self, '_vocab') and self._vocab else 0}\n"
             ")"
         )

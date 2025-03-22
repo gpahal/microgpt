@@ -370,7 +370,7 @@ def _bpe(
     return parts
 
 
-def _recover_merges(mergeable_ranks: dict[bytes, int]) -> dict[tuple[int, int], int]:
+def _recover_merges(mergeable_ranks: dict[bytes, int]) -> list[list[int]]:
     """
     Recover the merges from the mergeable ranks. The mergeable ranks contains byte sequences in
     their merged state and in order of their merge.
@@ -382,9 +382,9 @@ def _recover_merges(mergeable_ranks: dict[bytes, int]) -> dict[tuple[int, int], 
         mergeable_ranks: The mergeable ranks
 
     Returns:
-        A dictionary of merges
+        A list of merges
     """
-    merges = {}
+    merges: list[list[int]] = []
     for token, rank in mergeable_ranks.items():
         if len(token) == 1:
             continue
@@ -393,6 +393,6 @@ def _recover_merges(mergeable_ranks: dict[bytes, int]) -> dict[tuple[int, int], 
         # Recover the integer ranks of the pair
         ix0 = mergeable_ranks[pair_bytes[0]]
         ix1 = mergeable_ranks[pair_bytes[1]]
-        merges[(ix0, ix1)] = rank
+        merges.append([ix0, ix1, rank])
 
     return merges
