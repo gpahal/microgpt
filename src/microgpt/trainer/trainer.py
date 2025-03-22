@@ -10,7 +10,7 @@ import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from microgpt.logger import _new_logger
+from microgpt.common.logger import _new_logger
 from microgpt.model import Model, PretrainedModelConfig, load_model
 from microgpt.model.model_utils import _get_dtype
 from microgpt.tokenizer.data_utils import _DataLoader
@@ -53,13 +53,16 @@ class Trainer:
         logger: logging.Logger | None = None,
     ):
         """
-        Initialize the model. Do not call this constructor directly.
-        Instead, use microgpt.model.load_model.
+        Initialize the trainer. Do not call this constructor directly.
+        Instead, use microgpt.trainer.load_trainer.
 
         Args:
             create_key: A key to prevent instantiating the trainer directly
             model: The model to use
             params: The params to use
+            optimizer: The optimizer to use
+            iteration: The iteration to use
+            min_val_loss: The minimum validation loss to use
             logger: The logger to use
         """
         if create_key != _TRAINER_CREATE_KEY:
@@ -339,28 +342,23 @@ class Trainer:
         logger.info("Loaded untrained trainer")
         return trainer
 
-    def save_checkpoint(self, file_path_prefix: str) -> None:
+    def save_checkpoint(self, dir_path: str) -> None:
         """
-        Save the trainer to file_path_prefix.trainer_params.pt and file_path_prefix.trainer_optimizer.pt.
-        Save the model to file_path_prefix.model.pt.
-        Save the params to file_path_prefix.model_params.pt.
-        Save the tokenizer to file_path_prefix.tokenizer.model and human-readable file_path_prefix.tokenizer.vocab.
+        Save the trainer to dir_path/trainer_params.pt and dir_path/trainer_optimizer.pt.
+        Save the model to dir_path/model.pt.
+        Save the params to dir_path/model_params.pt.
+        Save the tokenizer to dir_path/tokenizer.model and human-readable dir_path/tokenizer.vocab.
 
         Args:
-            file_path_prefix: The prefix of the file path to save the model to. If the file
-                already exists, it will be overwritten
-
-        Args:
-            file_path_prefix: The prefix of the file path to save the model to. If the file
-                already exists, it will be overwritten
+            dir_path: The directory to save the model to. If the directory already exists, files in it might be overwritten
         """
-        self._model.save(file_path_prefix)
+        self._model.save(dir_path)
 
-        params_file_path = file_path_prefix + ".trainer_params.pt"
+        params_file_path = os.path.join(dir_path, "trainer_params.pt")
         self._logger.info(f"Saving trainer params to {params_file_path}")
         torch.save(
             {
-                "params": self._params.model_dump(),
+                "params": self._params.model_dump_json(),
                 "iteration": self._iteration,
                 "min_val_loss": self._min_val_loss,
             },
@@ -368,7 +366,7 @@ class Trainer:
         )
         self._logger.info(f"Saved trainer params to {params_file_path}")
 
-        optimizer_file_path = file_path_prefix + ".trainer_optimizer.pt"
+        optimizer_file_path = os.path.join(dir_path, "trainer_optimizer.pt")
         self._logger.info(f"Saving trainer optimizer to {optimizer_file_path}")
         torch.save(self._optimizer.state_dict(), optimizer_file_path)
         self._logger.info(f"Saved trainer optimizer to {optimizer_file_path}")
@@ -376,15 +374,15 @@ class Trainer:
     @classmethod
     async def _load_checkpointed(
         cls,
-        file_path_prefix: str,
+        dir_path: str,
         device: str | None = None,
         logger: logging.Logger | None = None,
     ) -> "Trainer":
         """
-        Load a checkpointed trainer that was saved to file_path_prefix.
+        Load a checkpointed trainer that was saved to dir_path.
 
         Args:
-            file_path_prefix: The prefix of the file path to load the trainer from
+            dir_path: The directory to load the trainer from
             device: The device to use for the trainer
             logger: The logger to use for the trainer
 
@@ -394,10 +392,10 @@ class Trainer:
         logger = _get_logger(logger)
 
         model = await load_model(
-            PretrainedModelConfig(file_path_prefix=file_path_prefix), device=device, logger=logger
+            PretrainedModelConfig(dir_path=dir_path), device=device, logger=logger
         )
 
-        params_file_path = file_path_prefix + ".trainer_params.pt"
+        params_file_path = os.path.join(dir_path, "trainer_params.pt")
         logger.info(f"Loading trainer params from {params_file_path}")
         params_dump = torch.load(params_file_path)
         params = TrainerParams(**params_dump["params"])
@@ -405,7 +403,7 @@ class Trainer:
         min_val_loss = params_dump["min_val_loss"]
         logger.info(f"Loaded trainer params: {params}")
 
-        optimizer_file_path = file_path_prefix + ".trainer_optimizer.pt"
+        optimizer_file_path = os.path.join(dir_path, "trainer_optimizer.pt")
         logger.info(f"Loading trainer optimizer from {optimizer_file_path}")
         optimizer = model.configure_optimizer(
             weight_decay=params.weight_decay,

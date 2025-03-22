@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 
-from microgpt.logger import _new_logger
-from microgpt.types import TextSource
-from microgpt.utils import _batch_read_text_sources
+from microgpt.common.data_source import DataSource, _batch_read_data_sources
+from microgpt.common.logger import _new_logger
 
 if TYPE_CHECKING:
     from .tokenizer import Tokenizer
@@ -93,30 +92,30 @@ class _DataLoader:
         return x, y
 
 
-async def _save_tokenized_text_sources(
+async def _save_tokenized_data_sources(
     tokenizer: "Tokenizer",
-    out_dir_path: str,
-    text_sources: TextSource | list[TextSource],
+    dir_path: str,
+    data_sources: DataSource | list[DataSource],
     logger: logging.Logger | None = None,
 ) -> None:
     """
-    Save the tokenized text sources to out_dir_path in shards of SHARD_SIZE tokens.
+    Save the tokenized data sources to dir_path in shards of SHARD_SIZE tokens.
 
     Args:
-        tokenizer: The tokenizer to use to tokenize the text sources
-        out_dir_path: The path to save the tokenized text sources to
-        text_sources: The text sources to tokenize and save
+        tokenizer: The tokenizer to use to tokenize the data sources
+        dir_path: The directory to save the tokenized data sources to
+        data_sources: The data sources to tokenize and save
         logger: The logger to use to log the progress of the tokenization
     """
     import multiprocessing as mp
 
     from tqdm import tqdm
 
-    out_dir_path = os.path.abspath(out_dir_path)
+    dir_path = os.path.abspath(dir_path)
     logger = _get_logger(logger)
-    logger.info(f"Saving text sources to {out_dir_path}")
+    logger.info(f"Saving text sources to {dir_path}")
 
-    os.makedirs(out_dir_path, exist_ok=True)
+    os.makedirs(dir_path, exist_ok=True)
 
     def _tokenize(text: str) -> np.ndarray:
         tokens = [tokenizer.eot_id] if tokenizer.eot_id is not None else []
@@ -139,7 +138,7 @@ async def _save_tokenized_text_sources(
         text_buffer: list[str] = []
         buffer_size = pool_size * 20
 
-        async for text in _batch_read_text_sources(text_sources):
+        async for text in _batch_read_data_sources(data_sources):
             text_buffer.append(text)
 
             if len(text_buffer) >= buffer_size:
@@ -152,7 +151,7 @@ async def _save_tokenized_text_sources(
                     while token_count + len(tokens) >= SHARD_SIZE:
                         # Save current shard
                         shard_path = os.path.join(
-                            out_dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
+                            dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
                         )
                         remainder = SHARD_SIZE - token_count
                         progress_bar.update(remainder)
@@ -183,7 +182,7 @@ async def _save_tokenized_text_sources(
             for tokens in tokens_list:
                 while token_count + len(tokens) >= SHARD_SIZE:
                     shard_path = os.path.join(
-                        out_dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
+                        dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
                     )
                     remainder = SHARD_SIZE - token_count
                     progress_bar.update(remainder)
@@ -206,7 +205,7 @@ async def _save_tokenized_text_sources(
         # Save final shard if it has any tokens
         if token_count > 0:
             shard_path = os.path.join(
-                out_dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
+                dir_path, f"{SHARD_FILE_PREFIX}{shard_index:06d}{SHARD_FILE_SUFFIX}"
             )
             remainder = SHARD_SIZE - token_count
             progress_bar.update(remainder)

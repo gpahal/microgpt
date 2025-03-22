@@ -8,10 +8,13 @@ from tiktoken import get_encoding
 from microgpt import (
     GPTTokenizer,
     PretrainedTokenizerConfig,
-    StrTextSource,
+    TextDataSource,
     Tokenizer,
     UntrainedTokenizerConfig,
-    load_tokenizer,
+)
+from microgpt.tokenizer.tokenizer_trainer import (
+    NonCheckpointedTokenizerTrainerConfig,
+    TokenizerTrainer,
 )
 
 FILE_TEXT_PREFIX = "FILE:"
@@ -44,13 +47,21 @@ TRAINED_TOKENIZER_VOCAB_SIZE = 320
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def trained_tokenizer():
+    import tempfile
+
     text = unpack_text(TAYLOR_SWIFT_FILE_PATH)
-    tokenizer = await load_tokenizer(config=UntrainedTokenizerConfig())
-    await tokenizer.train(
-        text_sources=[StrTextSource(name="taylor_swift", text=text)],
-        vocab_size=TRAINED_TOKENIZER_VOCAB_SIZE,
-    )
-    yield tokenizer
+    tokenizer = await Tokenizer.load(config=UntrainedTokenizerConfig())
+    with tempfile.TemporaryDirectory() as tmp_dir_path:
+        tokenizer_trainer = await TokenizerTrainer.load(
+            config=NonCheckpointedTokenizerTrainerConfig(
+                tokenizer_config=UntrainedTokenizerConfig(),
+                vocab_size=TRAINED_TOKENIZER_VOCAB_SIZE,
+                data_sources=[TextDataSource(name="taylor_swift", text=text)],
+                output_dir_path=os.path.join(tmp_dir_path, "trained_tokenizer"),
+            )
+        )
+        tokenizer = await tokenizer_trainer.run()
+        yield tokenizer
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -63,9 +74,9 @@ async def test_save_and_load(trained_tokenizer: Tokenizer):
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp_dir_path:
-        file_path_prefix = os.path.join(tmp_dir_path, "test_tokenizer")
-        await trained_tokenizer.save(file_path_prefix)
-        tokenizer = await Tokenizer._load_pretrained(file_path_prefix)
+        dir_path = os.path.join(tmp_dir_path, "test_tokenizer")
+        await trained_tokenizer.save(dir_path)
+        tokenizer = await Tokenizer._load_pretrained(dir_path)
         assert tokenizer._vocab_size == TRAINED_TOKENIZER_VOCAB_SIZE
 
 
@@ -82,10 +93,8 @@ async def test_tokenizer(trained_tokenizer: Tokenizer, text: str):
 async def pretrained_tokenizer():
     dirname = os.path.dirname(os.path.abspath(__file__))
     dirname = os.path.dirname(dirname)
-    file_path_prefix = os.path.join(dirname, "pretrained/tokenizer/data/pretrained")
-    tokenizer = await load_tokenizer(
-        config=PretrainedTokenizerConfig(file_path_prefix=file_path_prefix)
-    )
+    dir_path = os.path.join(dirname, "pretrained/tokenizer")
+    tokenizer = await Tokenizer.load(config=PretrainedTokenizerConfig(dir_path=dir_path))
     yield tokenizer
 
 

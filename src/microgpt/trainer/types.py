@@ -38,7 +38,7 @@ class NewTrainerConfig(BaseModel):
 
 class CheckpointedTrainerConfig(BaseModel):
     type: Literal["checkpointed"] = "checkpointed"
-    file_path_prefix: str
+    dir_path: str
     device: str | None = None
 
 

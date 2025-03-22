@@ -5,6 +5,10 @@
 *.model
 *.vocab
 *.pt
+tokenizer.json
+tokenizer_vocab.json
+model.json
+*_trainer.json
 
 # Jupyter notebooks
 .ipynb_checkpoints

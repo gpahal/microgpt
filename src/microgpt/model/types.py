@@ -25,7 +25,7 @@ class UntrainedModelConfig(BaseModel):
 
 class PretrainedModelConfig(BaseModel):
     type: Literal["pretrained"] = "pretrained"
-    file_path_prefix: str
+    dir_path: str
 
 
 class PretrainedGPT2ModelType(enum.StrEnum):

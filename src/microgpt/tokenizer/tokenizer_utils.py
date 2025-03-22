@@ -56,21 +56,21 @@ def _merge_ids_small(
 
         new_ids[j] = new_id
         j += 1
-        if i > 0:
+        if i > 0 and ids[i - 1] != -1:
             curr_pair = (ids[i - 1], ids[i])
             count = counts_dict.get(curr_pair, 0) - 1
             if count <= 0:
-                counts_dict.pop(curr_pair, None)
+                counts_dict.pop(curr_pair)
             else:
                 counts_dict[curr_pair] = count
 
             curr_pair = (ids[i - 1], new_id)
             counts_dict[curr_pair] = counts_dict.get(curr_pair, 0) + 1
-        if i < len(ids) - 2:
+        if i < len(ids) - 2 and ids[i + 2] != -1:
             curr_pair = (pair[1], ids[i + 2])
             count = counts_dict.get(curr_pair, 0) - 1
             if count <= 0:
-                counts_dict.pop(curr_pair, None)
+                counts_dict.pop(curr_pair)
             else:
                 counts_dict[curr_pair] = count
 
@@ -148,26 +148,28 @@ def _merge_ids(
     for i in pair_0_indices.tolist():
         if i > 0:
             id_i_prev = new_id if i == next_consecutive_i else int(ids[i - 1])
-            curr_pair = (id_i_prev, pair[0])
-            count = counts_dict.get(curr_pair, 0) - 1
-            if count <= 0:
-                counts_dict.pop(curr_pair, None)
-            else:
-                counts_dict[curr_pair] = count
+            if id_i_prev != -1:
+                curr_pair = (id_i_prev, pair[0])
+                count = counts_dict.get(curr_pair, 0) - 1
+                if count <= 0:
+                    counts_dict.pop(curr_pair)
+                else:
+                    counts_dict[curr_pair] = count
 
-            curr_pair = (id_i_prev, new_id)
-            counts_dict[curr_pair] = counts_dict.get(curr_pair, 0) + 1
+                curr_pair = (id_i_prev, new_id)
+                counts_dict[curr_pair] = counts_dict.get(curr_pair, 0) + 1
         if i < len(ids) - 2:
             id_i_next = int(ids[i + 2])
-            curr_pair = (pair[1], id_i_next)
-            count = counts_dict.get(curr_pair, 0) - 1
-            if count <= 0:
-                counts_dict.pop(curr_pair, None)
-            else:
-                counts_dict[curr_pair] = count
+            if id_i_next != -1:
+                curr_pair = (pair[1], id_i_next)
+                count = counts_dict.get(curr_pair, 0) - 1
+                if count <= 0:
+                    counts_dict.pop(curr_pair)
+                else:
+                    counts_dict[curr_pair] = count
 
-            curr_pair = (new_id, id_i_next)
-            counts_dict[curr_pair] = counts_dict.get(curr_pair, 0) + 1
+                curr_pair = (new_id, id_i_next)
+                counts_dict[curr_pair] = counts_dict.get(curr_pair, 0) + 1
 
         next_consecutive_i = i + 2
 

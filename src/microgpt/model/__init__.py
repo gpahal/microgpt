@@ -22,7 +22,7 @@ async def load_model(
         )
     elif config.type == "pretrained":
         return Model._load_pretrained(
-            file_path_prefix=config.file_path_prefix,
+            dir_path=config.dir_path,
             device=device,
             logger=logger,
         )

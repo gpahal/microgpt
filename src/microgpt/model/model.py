@@ -8,15 +8,16 @@ See: https://github.com/karpathy/nanoGPT/blob/master/model.py
 import inspect
 import logging
 import math
+import os
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from microgpt.logger import _new_logger
-from microgpt.tokenizer import PretrainedTokenizerConfig, Tokenizer, load_tokenizer
-from microgpt.types import TextSource
+from microgpt.common.data_source import DataSource
+from microgpt.common.logger import _new_logger
+from microgpt.tokenizer import PretrainedTokenizerConfig, Tokenizer
 
 from .model_utils import _get_device, _get_device_type
 from .modules import Block, LayerNorm
@@ -486,17 +487,17 @@ class Model(nn.Module):
         ids = self.generate(ids, max_new_tokens, temperature, top_k)
         return self.tokenizer.decode(ids[0].tolist())
 
-    async def save_tokenized_text_sources(
-        self, out_dir_path: str, text_sources: TextSource | list[TextSource]
+    async def save_tokenized_data_sources(
+        self, dir_path: str, data_sources: DataSource | list[DataSource]
     ) -> None:
         """
-        Save the tokenized text sources to out_dir_path in shards.
+        Save the tokenized data sources to dir_path in shards.
 
         Args:
-            out_dir_path: The path to save the tokenized text sources to
-            text_sources: The text sources to tokenize and save
+            dir_path: The directory to save the tokenized data sources to
+            data_sources: The data sources to tokenize and save
         """
-        await self.tokenizer.save_tokenized_text_sources(out_dir_path, text_sources)
+        await self.tokenizer.save_tokenized_data_sources(dir_path, data_sources)
 
     @classmethod
     def _load_untrained(
@@ -532,24 +533,23 @@ class Model(nn.Module):
         logger.info("Loaded untrained model")
         return model
 
-    def save(self, file_path_prefix: str) -> None:
+    def save(self, dir_path: str) -> None:
         """
-        Save the model to file_path_prefix.model.pt.
-        Save the params to file_path_prefix.model_params.pt.
-        Save the tokenizer to file_path_prefix.tokenizer.model and human-readable file_path_prefix.tokenizer.vocab.
+        Save the model to dir_path/model.pt.
+        Save the params to dir_path/model_params.pt.
+        Save the tokenizer to dir_path/tokenizer.model and human-readable dir_path/tokenizer.vocab.
 
         Args:
-            file_path_prefix: The prefix of the file path to save the model to. If the file
-                already exists, it will be overwritten
+            dir_path: The directory to save the model to. If the directory already exists, files in it might be overwritten
         """
-        self.tokenizer.save(file_path_prefix)
+        self.tokenizer.save(dir_path)
 
-        params_file_path = file_path_prefix + ".model_params.pt"
+        params_file_path = os.path.join(dir_path, "model_params.pt")
         self._logger.info(f"Saving model params to {params_file_path}")
-        torch.save(self.params.model_dump(), params_file_path)
+        torch.save(self.params.model_dump_json(), params_file_path)
         self._logger.info(f"Saved model params to {params_file_path}")
 
-        file_path = file_path_prefix + ".model.pt"
+        file_path = os.path.join(dir_path, "model.pt")
         self._logger.info(f"Saving model to {file_path}")
         torch.save(self.state_dict(), file_path)
         self._logger.info(f"Saved model to {file_path}")
@@ -557,15 +557,15 @@ class Model(nn.Module):
     @classmethod
     async def _load_pretrained(
         cls,
-        file_path_prefix: str,
+        dir_path: str,
         device: str | None = None,
         logger: logging.Logger | None = None,
     ) -> "Model":
         """
-        Load a pretrained model that was saved to file_path_prefix.
+        Load a pretrained model that was saved to dir_path.
 
         Args:
-            file_path_prefix: The prefix of the file path to load the model from
+            dir_path: The directory to load the model from
             device: The device to use for the model
             logger: The logger to use for the model
 
@@ -574,17 +574,17 @@ class Model(nn.Module):
         """
         logger = _get_logger(logger)
 
-        tokenizer = await load_tokenizer(
-            PretrainedTokenizerConfig(file_path_prefix=file_path_prefix), logger=logger
+        tokenizer = await Tokenizer.load(
+            config=PretrainedTokenizerConfig(out_dir_path=dir_path), logger=logger
         )
 
-        params_file_path = file_path_prefix + ".model_params.pt"
+        params_file_path = os.path.join(dir_path, "model_params.pt")
         logger.info(f"Loading model params from {params_file_path}")
         params_dump = torch.load(params_file_path)
         params = ModelParams(**params_dump)
         logger.info(f"Loaded model params: {params}")
 
-        model_file_path = file_path_prefix + ".model.pt"
+        model_file_path = os.path.join(dir_path, "model.pt")
         logger.info(f"Loading model from {model_file_path}")
         device = _get_device(device)
         model = Model(
@@ -628,7 +628,7 @@ class Model(nn.Module):
 
         logger.info(f"Loading tokenizer for pretrained gpt 2 model: {model_type}")
         tokenizer_config = model_type.tokenizer_config()
-        tokenizer = await load_tokenizer(tokenizer_config, logger=logger)
+        tokenizer = await Tokenizer.load(config=tokenizer_config, logger=logger)
         logger.info(f"Loaded tokenizer: {tokenizer}")
 
         params = model_type.params(dropout_p=dropout_p, bias=bias)

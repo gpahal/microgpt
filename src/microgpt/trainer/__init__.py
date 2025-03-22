@@ -13,7 +13,7 @@ async def load_trainer(config: TrainerConfig, logger: logging.Logger | None = No
         )
     elif config.type == "checkpointed":
         return await Trainer._load_checkpointed(
-            file_path_prefix=config.file_path_prefix, device=config.device, logger=logger
+            dir_path=config.dir_path, device=config.device, logger=logger
         )
     else:
         raise ValueError(f"Unknown trainer config type: {config.type}")
