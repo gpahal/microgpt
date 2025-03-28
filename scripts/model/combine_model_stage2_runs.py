@@ -21,7 +21,7 @@ def main() -> None:
     output_dir_path = os.path.join(trained_model_dir_path, "output")
     os.makedirs(output_dir_path, exist_ok=True)
 
-    model_weights: dict[str, torch.Tensor]
+    model_weights: dict[str, torch.Tensor] = {}
     for run_idx, run in enumerate(run_ints):
         run_output_dir_path = os.path.join(trained_model_dir_path, f"run_{run}/output")
         assert os.path.exists(run_output_dir_path), f"Trained model directory not found: {run_output_dir_path}"
@@ -63,7 +63,8 @@ def main() -> None:
 
         run_model_weights = torch.load(os.path.join(run_output_dir_path, "model.pt"), weights_only=True)
         if run_idx == 0:
-            model_weights = run_model_weights / len(run_ints)
+            for key, value in run_model_weights.items():
+                model_weights[key] = value / len(run_ints)
         else:
             for key, value in run_model_weights.items():
                 model_weights[key] += value / len(run_ints)
