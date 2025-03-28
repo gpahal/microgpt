@@ -7,22 +7,22 @@ Command to stage 2 train the pretrained model for 3 epochs. To download the trai
 ```sh
 uv run python -m scripts.model.train_model_stage2 \
     --run 1 \
-    --epochs 2 \
-    --max-iterations-per-epoch 1510 \
+    --epochs 3 \
+    --max-iterations-per-epoch 755 \
     --batch-size 64 \
-    --gradient-accumulation-iterations 4 \
+    --gradient-accumulation-iterations 8 \
     --enable-hellaswag-eval
 ```
 
 For multi-GPU training, use the following command:
 
 ```sh
-uv run torchrun --standalone --nproc_per_node=4 scripts/model/train_model_stage2.py \
+uv run torchrun --standalone --nproc_per_node=8 scripts/model/train_model_stage2.py \
     --run 1 \
-    --epochs 2 \
-    --max-iterations-per-epoch 1510 \
+    --epochs 3 \
+    --max-iterations-per-epoch 755 \
     --batch-size 64 \
-    --gradient-accumulation-iterations 4 \
+    --gradient-accumulation-iterations 8 \
     --enable-hellaswag-eval
 ```
 
@@ -104,8 +104,8 @@ async def train(
             data_dir_path=os.path.abspath(os.path.join(dirname, "..", "data/data_stage2")),
             batch_size=batch_size,
             gradient_accumulation_iterations=gradient_accumulation_iterations,
-            max_learning_rate=1e-5,
-            min_learning_rate=5e-6,
+            max_learning_rate=1e-4,
+            min_learning_rate=5e-5,
             enable_hellaswag_eval=enable_hellaswag_eval,
             loss_output_file_path=os.path.join(trained_model_dir_path, "output", "loss.txt"),
             eval_output_file_path=os.path.join(trained_model_dir_path, "output", "eval.txt"),
