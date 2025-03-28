@@ -32,24 +32,6 @@ DATASET_CONFIGS: list[DatasetConfig] = [
         max_tokens_count=100_000_000,
         disallowed_substrings=["```"],
     ),
-    DatasetConfig(
-        name="eli5",
-        params=DatasetParams(
-            path="sentence-transformers/eli5",
-            split="train",
-            field="answer",
-        ),
-        max_tokens_count=100_000_000,
-    ),
-    DatasetConfig(
-        name="wikipedia_en_sentences",
-        params=DatasetParams(
-            path="sentence-transformers/wikipedia-en-sentences",
-            split="train",
-            field="sentence",
-        ),
-        max_tokens_count=100_000_000,
-    ),
 ]
 
 Command to prepare the data and upload to S3:
@@ -77,16 +59,26 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             subset="wikihow",
             split="train",
         ),
-        max_tokens_count=5_000_000,
+        max_tokens_count=250_000_000,
     ),
     DatasetConfig(
-        name="eli5",
+        name="cosmopedia_openstax",
         params=DatasetParams(
-            path="sentence-transformers/eli5",
+            path="HuggingFaceTB/cosmopedia",
+            subset="openstax",
             split="train",
-            field="answer",
         ),
-        max_tokens_count=5_000_000,
+        max_tokens_count=125_000_000,
+    ),
+    DatasetConfig(
+        name="alpaca_cleaned",
+        params=DatasetParams(
+            path="yahma/alpaca-cleaned",
+            split="train",
+            field="output",
+        ),
+        max_tokens_count=100_000_000,
+        disallowed_substrings=["```"],
     ),
 ]
 
