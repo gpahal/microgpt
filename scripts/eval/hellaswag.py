@@ -1,9 +1,11 @@
 import asyncio
+import random
 from collections.abc import Coroutine
 from contextlib import nullcontext
 from typing import Annotated, Any
 
 import torch
+import torch.distributed as distributed
 import torch.nn.functional as F
 import typer
 from tqdm import tqdm
@@ -15,6 +17,7 @@ from microgpt import (
     PretrainedGPT2ModelType,
     PretrainedModelConfig,
 )
+from microgpt.common.ddp import _DDPParams, _get_ddp_params
 from microgpt.common.device import _get_dtype, _get_torch_dtype
 from microgpt.common.logger import _new_logger
 from microgpt.model.hellaswag_utils import _NUM_VAL_EXAMPLES, _render_example, _split_examples_iter
@@ -36,14 +39,37 @@ def evaluate(model: Model):
     model.eval()
     dtype = _get_dtype(model._device_type)
     tdtype = _get_torch_dtype(dtype)
+    ddp_params = _get_ddp_params()
+    is_ddp = ddp_params is not None
+    if is_ddp:
+        distributed.init_process_group(backend="nccl")
+        torch.cuda.set_device(f"cuda:{ddp_params._local_rank}")
+    else:
+        ddp_params = _DDPParams(_rank=0, _local_rank=0, _world_size=1)
+
+    is_master_process = ddp_params._local_rank == 0
+
     model_forward_ctx = (
         nullcontext() if model._device_type == "cpu" else torch.autocast(device_type=model._device_type, dtype=tdtype)
     )
+
+    # Update torch settings
+    manual_seed = 42 + ddp_params._rank
+    random.seed(manual_seed)
+    torch.manual_seed(manual_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(manual_seed)
+
     torch.set_float32_matmul_precision("high")
+
     n_total = 0
     n_correct = 0
-    progress_bar = tqdm(total=_NUM_VAL_EXAMPLES, desc="Evaluating HellaSwag", unit="examples")
-    for example in _split_examples_iter("val"):
+    if is_master_process:
+        progress_bar = tqdm(total=_NUM_VAL_EXAMPLES, desc="Evaluating HellaSwag", unit="examples")
+    for i, example in enumerate(_split_examples_iter("val")):
+        if is_ddp and i % ddp_params._world_size != ddp_params._rank:
+            continue
+
         ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=model._device)
         with torch.no_grad():
             with model_forward_ctx:
@@ -64,7 +90,7 @@ def evaluate(model: Model):
         n_total += 1
         n_correct += int(pred_norm == label)
 
-        if n_total < 10:
+        if is_master_process and n_total <= 3:
             print("---")
             print(f"Context:\n{example['ctx']}")
             print("Endings:")
@@ -72,9 +98,23 @@ def evaluate(model: Model):
                 print(f"{i} (loss: {avg_loss[i].item():.4f}) {end}")
             print(f"Predicted: {pred_norm}, actual: {label}")
 
-        progress_bar.update(1)
+        if is_master_process:
+            progress_bar.update(1)
 
-    progress_bar.close()
+    if is_ddp:
+        n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=model._device)
+        n_correct_tensor = torch.tensor(n_correct, dtype=torch.long, device=model._device)
+        distributed.all_reduce(n_total_tensor, op=distributed.ReduceOp.SUM)
+        distributed.all_reduce(n_correct_tensor, op=distributed.ReduceOp.SUM)
+        n_total = n_total_tensor.item()
+        n_correct = n_correct_tensor.item()
+
+    if is_master_process:
+        progress_bar.close()
+
+    if is_ddp:
+        distributed.destroy_process_group()
+
     accuracy = n_correct / n_total
     logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
     return accuracy
