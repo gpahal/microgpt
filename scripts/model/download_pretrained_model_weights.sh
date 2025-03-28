@@ -2,4 +2,4 @@
 
 set -Eeuo pipefail
 
-git lfs pull --exclude="*.pt"
+git lfs pull --exclude=""
