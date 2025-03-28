@@ -1,0 +1,115 @@
+import asyncio
+from collections.abc import Coroutine
+from contextlib import nullcontext
+from typing import Annotated, Any
+
+import torch
+import torch.nn.functional as F
+import typer
+from tqdm import tqdm
+
+from microgpt import (
+    CustomTrainedModelConfig,
+    Model,
+    PretrainedGPT2ModelConfig,
+    PretrainedGPT2ModelType,
+    PretrainedModelConfig,
+)
+from microgpt.common.device import _get_torch_dtype
+from microgpt.common.logger import _new_logger
+from microgpt.model.hellaswag_utils import _render_example, _split_examples_iter
+
+logger = _new_logger(__name__)
+
+app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+
+
+def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
+    return asyncio.get_event_loop().run_until_complete(coro)
+
+
+def evaluate(model: Model):
+    model.eval()
+    model_forward_ctx = (
+        nullcontext()
+        if model._device_type == "cpu"
+        else torch.autocast(device_type=model._device_type, dtype=_get_torch_dtype(model._device_type))
+    )
+    torch.set_float32_matmul_precision("high")
+    n_total = 0
+    n_correct = 0
+    progress_bar = tqdm(total=10_042, desc="Evaluating HellaSwag", unit="examples")
+    for example in _split_examples_iter("val"):
+        ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=model._device)
+        with torch.no_grad():
+            with model_forward_ctx:
+                logits, _ = model(ids, return_all_logits=True)
+
+            shift_logits = (logits[..., :-1, :]).contiguous()
+            shift_tokens = (ids[..., 1:]).contiguous()
+            flat_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
+            flat_shift_tokens = shift_tokens.view(-1)
+            shift_losses = F.cross_entropy(flat_shift_logits, flat_shift_tokens, reduction="none")
+            shift_losses = shift_losses.view(ids.size(0), -1)
+            shift_mask = (mask[..., 1:]).contiguous()
+            masked_shift_losses = shift_losses * shift_mask
+            sum_loss = masked_shift_losses.sum(dim=1)
+            avg_loss = sum_loss / shift_mask.sum(dim=1)
+            pred_norm = avg_loss.argmin().item()
+
+        n_total += 1
+        n_correct += int(pred_norm == label)
+
+        if n_total < 10:
+            print("---")
+            print(f"Context:\n{example['ctx']}")
+            print("Endings:")
+            for i, end in enumerate(example["endings"]):
+                print(f"{i} (loss: {avg_loss[i].item():.4f}) {end}")
+            print(f"Predicted: {pred_norm}, actual: {label}")
+
+        progress_bar.update(1)
+
+    accuracy = n_correct / n_total
+    logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
+    return accuracy
+
+
+async def _custom_trained(dir_path: str | None = None) -> None:
+    model = await Model.load(CustomTrainedModelConfig(dir_path=dir_path))
+    evaluate(model)
+
+
+async def _pretrained() -> None:
+    model = await Model.load(PretrainedModelConfig())
+    evaluate(model)
+
+
+async def _pretrained_gpt2(model_type: PretrainedGPT2ModelType) -> None:
+    model = await Model.load(PretrainedGPT2ModelConfig(model_type=model_type))
+    evaluate(model)
+
+
+@app.command(name="custom-trained")
+def custom_trained(dir_path: Annotated[str | None, typer.Option("--dir-path", "-d")] = None):
+    _run_async(_custom_trained(dir_path))
+
+
+@app.command(name="pretrained")
+def pretrained():
+    _run_async(_pretrained())
+
+
+@app.command(name="pretrained-gpt-2")
+def pretrained_gpt_2(model_type: Annotated[PretrainedGPT2ModelType, typer.Option("--model-type", "-m")]):
+    _run_async(_pretrained_gpt2(model_type))
+
+
+if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    app()

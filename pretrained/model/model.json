@@ -1,0 +1,15 @@
+{
+  "max_seq_len": 1024,
+  "d_model": 768,
+  "n_layers": 12,
+  "n_heads": 12,
+  "use_padded_vocab_size": true,
+  "use_rope": true,
+  "rope_theta": 10000.0,
+  "is_rope_full_precision": true,
+  "embd_dropout_p": 0.0,
+  "attn_dropout_p": 0.0,
+  "residual_dropout_p": 0.0,
+  "init_std": 0.02,
+  "init_residual_scaled_factor": 2.0
+}

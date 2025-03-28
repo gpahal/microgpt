@@ -1,0 +1,7 @@
+# Include model files
+!*.pt
+!tokenizer.json
+!tokenizer_vocab.json
+!model.json
+!loss.txt
+!eval.txt
