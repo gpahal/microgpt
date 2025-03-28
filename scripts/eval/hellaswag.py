@@ -35,7 +35,7 @@ def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
     return asyncio.get_event_loop().run_until_complete(coro)
 
 
-def evaluate(model: Model):
+def evaluate(model: Model) -> None:
     model.eval()
     device = model._device
     device_type = model._device_type
@@ -71,6 +71,8 @@ def evaluate(model: Model):
         progress_bar = tqdm(total=_NUM_VAL_EXAMPLES, desc="Evaluating HellaSwag", unit="examples")
     for i, example in enumerate(_split_examples_iter("val")):
         if is_ddp and i % ddp_params._world_size != ddp_params._rank:
+            if is_master_process:
+                progress_bar.update(1)
             continue
 
         ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=device)
@@ -102,7 +104,7 @@ def evaluate(model: Model):
             print(f"Predicted: {pred_norm}, actual: {label}")
 
         if is_master_process:
-            progress_bar.update(ddp_params._world_size)
+            progress_bar.update(1)
 
     if is_ddp:
         n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=device)
@@ -112,14 +114,13 @@ def evaluate(model: Model):
         n_total = n_total_tensor.item()
         n_correct = n_correct_tensor.item()
 
+    if is_ddp:
+        distributed.destroy_process_group()
+
     if is_master_process:
         progress_bar.close()
         accuracy = n_correct / n_total
         logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
-
-    if is_ddp:
-        distributed.destroy_process_group()
-    return accuracy
 
 
 async def _custom_trained(dir_path: str | None = None) -> None:
