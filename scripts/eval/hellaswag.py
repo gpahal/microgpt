@@ -102,7 +102,7 @@ def evaluate(model: Model):
             print(f"Predicted: {pred_norm}, actual: {label}")
 
         if is_master_process:
-            progress_bar.update(1)
+            progress_bar.update(ddp_params._world_size)
 
     if is_ddp:
         n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=device)
@@ -114,12 +114,11 @@ def evaluate(model: Model):
 
     if is_master_process:
         progress_bar.close()
+        accuracy = n_correct / n_total
+        logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
 
     if is_ddp:
         distributed.destroy_process_group()
-
-    accuracy = n_correct / n_total
-    logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
     return accuracy
 
 
