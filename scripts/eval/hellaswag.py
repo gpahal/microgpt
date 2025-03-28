@@ -37,21 +37,24 @@ def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
 
 def evaluate(model: Model):
     model.eval()
+    device = model._device
+    device_type = model._device_type
     dtype = _get_dtype(model._device_type)
     tdtype = _get_torch_dtype(dtype)
     ddp_params = _get_ddp_params()
     is_ddp = ddp_params is not None
     if is_ddp:
         distributed.init_process_group(backend="nccl")
-        torch.cuda.set_device(f"cuda:{ddp_params._local_rank}")
+        device = f"cuda:{ddp_params._local_rank}"
+        torch.cuda.set_device(device)
+        model._device = device
+        model.to(device)
     else:
         ddp_params = _DDPParams(_rank=0, _local_rank=0, _world_size=1)
 
     is_master_process = ddp_params._local_rank == 0
 
-    model_forward_ctx = (
-        nullcontext() if model._device_type == "cpu" else torch.autocast(device_type=model._device_type, dtype=tdtype)
-    )
+    model_forward_ctx = nullcontext() if device_type == "cpu" else torch.autocast(device_type=device_type, dtype=tdtype)
 
     # Update torch settings
     manual_seed = 42 + ddp_params._rank
@@ -70,7 +73,7 @@ def evaluate(model: Model):
         if is_ddp and i % ddp_params._world_size != ddp_params._rank:
             continue
 
-        ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=model._device)
+        ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=device)
         with torch.no_grad():
             with model_forward_ctx:
                 logits, _ = model(ids, return_all_logits=True)
@@ -102,8 +105,8 @@ def evaluate(model: Model):
             progress_bar.update(1)
 
     if is_ddp:
-        n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=model._device)
-        n_correct_tensor = torch.tensor(n_correct, dtype=torch.long, device=model._device)
+        n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=device)
+        n_correct_tensor = torch.tensor(n_correct, dtype=torch.long, device=device)
         distributed.all_reduce(n_total_tensor, op=distributed.ReduceOp.SUM)
         distributed.all_reduce(n_correct_tensor, op=distributed.ReduceOp.SUM)
         n_total = n_total_tensor.item()
