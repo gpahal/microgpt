@@ -11,7 +11,7 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             subset="wikihow",
             split="train",
         ),
-        max_tokens_count=250_000_000,
+        max_tokens_count=200_000_000,
     ),
     DatasetConfig(
         name="cosmopedia_openstax",
@@ -20,7 +20,7 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             subset="openstax",
             split="train",
         ),
-        max_tokens_count=125_000_000,
+        max_tokens_count=100_000_000,
     ),
     DatasetConfig(
         name="alpaca_cleaned",
@@ -29,7 +29,7 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             split="train",
             field="output",
         ),
-        max_tokens_count=100_000_000,
+        max_tokens_count=10_000_000,
         disallowed_substrings=["```"],
     ),
 ]
@@ -59,16 +59,7 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             subset="wikihow",
             split="train",
         ),
-        max_tokens_count=250_000_000,
-    ),
-    DatasetConfig(
-        name="cosmopedia_openstax",
-        params=DatasetParams(
-            path="HuggingFaceTB/cosmopedia",
-            subset="openstax",
-            split="train",
-        ),
-        max_tokens_count=125_000_000,
+        max_tokens_count=5_000_000,
     ),
     DatasetConfig(
         name="alpaca_cleaned",
@@ -77,7 +68,7 @@ DATASET_CONFIGS: list[DatasetConfig] = [
             split="train",
             field="output",
         ),
-        max_tokens_count=100_000_000,
+        max_tokens_count=1_000_000,
         disallowed_substrings=["```"],
     ),
 ]

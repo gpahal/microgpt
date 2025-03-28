@@ -8,7 +8,7 @@ Command to stage 2 train the pretrained model for 3 epochs. To download the trai
 uv run python -m scripts.model.train_model_stage2 \
     --run 1 \
     --epochs 3 \
-    --max-iterations-per-epoch 755 \
+    --max-iterations-per-epoch 505 \
     --batch-size 64 \
     --gradient-accumulation-iterations 8 \
     --enable-hellaswag-eval
@@ -20,7 +20,7 @@ For multi-GPU training, use the following command:
 uv run torchrun --standalone --nproc_per_node=8 scripts/model/train_model_stage2.py \
     --run 1 \
     --epochs 3 \
-    --max-iterations-per-epoch 755 \
+    --max-iterations-per-epoch 505 \
     --batch-size 64 \
     --gradient-accumulation-iterations 8 \
     --enable-hellaswag-eval
