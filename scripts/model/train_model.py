@@ -93,7 +93,7 @@ async def train(
         os.makedirs(os.path.join(trained_model_dir_path, "output"), exist_ok=True)
 
     if checkpointing_interval is None:
-        checkpointing_interval = min(10000, max(10, max_iterations_per_epoch // 100))
+        checkpointing_interval = min(10000, max(10, max_iterations_per_epoch // 25))
         logger.info(f"Checkpointing iterations interval: {checkpointing_interval}")
 
     model_config = UntrainedModelConfig(

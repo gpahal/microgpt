@@ -15,7 +15,7 @@ from microgpt import (
     PretrainedGPT2ModelType,
     PretrainedModelConfig,
 )
-from microgpt.common.device import _get_torch_dtype
+from microgpt.common.device import _get_dtype, _get_torch_dtype
 from microgpt.common.logger import _new_logger
 from microgpt.model.hellaswag_utils import _NUM_VAL_EXAMPLES, _render_example, _split_examples_iter
 
@@ -34,10 +34,10 @@ def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
 
 def evaluate(model: Model):
     model.eval()
+    dtype = _get_dtype(model._device_type)
+    tdtype = _get_torch_dtype(dtype)
     model_forward_ctx = (
-        nullcontext()
-        if model._device_type == "cpu"
-        else torch.autocast(device_type=model._device_type, dtype=_get_torch_dtype(model._device_type))
+        nullcontext() if model._device_type == "cpu" else torch.autocast(device_type=model._device_type, dtype=tdtype)
     )
     torch.set_float32_matmul_precision("high")
     n_total = 0
