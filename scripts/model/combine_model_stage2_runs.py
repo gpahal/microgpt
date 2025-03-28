@@ -63,13 +63,10 @@ def main() -> None:
 
         run_model_weights = torch.load(os.path.join(run_output_dir_path, "model.pt"), weights_only=True)
         if run_idx == 0:
-            model_weights = run_model_weights
+            model_weights = run_model_weights / len(run_ints)
         else:
             for key, value in run_model_weights.items():
-                model_weights[key] += value
-
-    for key, value in model_weights.items():
-        model_weights[key] = value / len(run_ints)
+                model_weights[key] += value / len(run_ints)
 
     torch.save(model_weights, os.path.join(output_dir_path, "model.pt"))
 
