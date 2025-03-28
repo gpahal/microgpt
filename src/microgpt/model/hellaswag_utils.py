@@ -61,7 +61,7 @@ from microgpt.tokenizer import Tokenizer
 logger = _new_logger(__name__)
 
 _CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".cache", "hellaswag"))
-
+_NUM_VAL_EXAMPLES = 10_042
 
 _SPLIT_URLS = {
     "train": "https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_train.jsonl",

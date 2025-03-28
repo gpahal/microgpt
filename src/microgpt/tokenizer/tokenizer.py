@@ -484,7 +484,16 @@ class Tokenizer:
         """
         if config.dir_path is None:
             config.dir_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "training", "trained_tokenizer")
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "scripts",
+                    "tokenizer",
+                    "trained_tokenizer",
+                    "output",
+                )
             )
 
         import json

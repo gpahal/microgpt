@@ -17,7 +17,7 @@ from microgpt import (
 )
 from microgpt.common.device import _get_torch_dtype
 from microgpt.common.logger import _new_logger
-from microgpt.model.hellaswag_utils import _render_example, _split_examples_iter
+from microgpt.model.hellaswag_utils import _NUM_VAL_EXAMPLES, _render_example, _split_examples_iter
 
 logger = _new_logger(__name__)
 
@@ -42,7 +42,7 @@ def evaluate(model: Model):
     torch.set_float32_matmul_precision("high")
     n_total = 0
     n_correct = 0
-    progress_bar = tqdm(total=10_042, desc="Evaluating HellaSwag", unit="examples")
+    progress_bar = tqdm(total=_NUM_VAL_EXAMPLES, desc="Evaluating HellaSwag", unit="examples")
     for example in _split_examples_iter("val"):
         ids, mask, label = _render_example(tokenizer=model._tokenizer, example=example, device=model._device)
         with torch.no_grad():
@@ -74,6 +74,7 @@ def evaluate(model: Model):
 
         progress_bar.update(1)
 
+    progress_bar.close()
     accuracy = n_correct / n_total
     logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
     return accuracy

@@ -699,7 +699,7 @@ class Model(nn.Module):
         """
         if config.dir_path is None:
             config.dir_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "training", "trained_model")
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "model", "trained_model", "output")
             )
 
         logger.info(f"Loading {name} model: config={config}")

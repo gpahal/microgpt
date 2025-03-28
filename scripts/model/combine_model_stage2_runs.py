@@ -1,37 +1,29 @@
 import os
 import shutil
-from typing import Annotated
 
 import torch
-import typer
 
 from microgpt.common.logger import _new_logger
-
-app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
 
 logger = _new_logger(__name__)
 
 
-@app.command()
-def main(
-    runs: Annotated[
-        int,
-        typer.Option("--run", help="The runs to combine. Comma-separated list of run numbers"),
-    ],
-) -> None:
-    run_strs = runs.split(",")
-    run_ints = [int(run.strip()) for run in run_strs]
+def main() -> None:
+    dirname = os.path.dirname(os.path.abspath(__file__))
+    trained_model_dir_path = os.path.join(dirname, "trained_model_stage2")
+    run_dirs = os.listdir(trained_model_dir_path)
+    run_dirs = [s for s in run_dirs if s.startswith("run_") and os.path.isdir(os.path.join(trained_model_dir_path, s))]
+    logger.info(f"Found {len(run_dirs)} runs: run_dirs={run_dirs}")
+    run_ints = [int(run[4:].strip()) for run in run_dirs]
+    logger.info(f"Found {len(run_ints)} run ints: run_ints={run_ints}")
     assert len(run_ints) > 0, "At least one run is required"
 
-    dirname = os.path.dirname(os.path.abspath(__file__))
-    output_dir_path = os.path.join(dirname, "trained_model_stage2/output")
+    output_dir_path = os.path.join(trained_model_dir_path, "output")
+    os.makedirs(output_dir_path, exist_ok=True)
+
     model_weights: dict[str, torch.Tensor]
     for run_idx, run in enumerate(run_ints):
-        run_output_dir_path = os.path.join(dirname, f"trained_model_stage2/run_{run}/output")
+        run_output_dir_path = os.path.join(trained_model_dir_path, f"run_{run}/output")
         assert os.path.exists(run_output_dir_path), f"Trained model directory not found: {run_output_dir_path}"
         assert os.path.exists(os.path.join(run_output_dir_path, "model.json")), (
             f"Run {run} model output model file not found: {run_output_dir_path}"
@@ -83,4 +75,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    main()
