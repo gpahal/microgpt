@@ -16,9 +16,9 @@ async def main() -> None:
     trained_model_dir_path = os.path.join(dirname, "trained_model_stage2")
     run_dirs = os.listdir(trained_model_dir_path)
     run_dirs = [s for s in run_dirs if s.startswith("run_") and os.path.isdir(os.path.join(trained_model_dir_path, s))]
-    logger.info(f"Found {len(run_dirs)} runs: run_dirs={run_dirs}")
     run_ints = [int(run[4:].strip()) for run in run_dirs]
-    logger.info(f"Found {len(run_ints)} run ints: run_ints={run_ints}")
+    run_ints.sort()
+    logger.info(f"Found {len(run_ints)} runs: runs={run_ints}")
     assert len(run_ints) > 0, "At least one run is required"
 
     output_dir_path = os.path.join(trained_model_dir_path, "output")

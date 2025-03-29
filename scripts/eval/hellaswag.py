@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 from collections.abc import Coroutine
 from contextlib import nullcontext
@@ -13,13 +14,14 @@ from tqdm import tqdm
 from microgpt import (
     CustomTrainedModelConfig,
     Model,
+    ModelConfig,
     PretrainedGPT2ModelConfig,
     PretrainedGPT2ModelType,
     PretrainedModelConfig,
 )
 from microgpt.common.ddp import _DDPParams, _get_ddp_params
-from microgpt.common.device import _get_dtype, _get_torch_dtype
-from microgpt.common.logger import _new_logger
+from microgpt.common.device import _get_device, _get_dtype, _get_torch_dtype
+from microgpt.common.logger import _new_logger, _set_logging_level
 from microgpt.model.hellaswag_utils import _NUM_VAL_EXAMPLES, _render_example, _split_examples_iter
 
 logger = _new_logger(__name__)
@@ -35,35 +37,14 @@ def _run_async[RT](coro: Coroutine[Any, Any, RT]) -> RT:
     return asyncio.get_event_loop().run_until_complete(coro)
 
 
-def evaluate(model: Model) -> None:
+def evaluate(model: Model, is_ddp: bool, ddp_params: _DDPParams) -> None:
     model.eval()
     device = model._device
     device_type = model._device_type
     dtype = _get_dtype(model._device_type)
     tdtype = _get_torch_dtype(dtype)
-    ddp_params = _get_ddp_params()
-    is_ddp = ddp_params is not None
-    if is_ddp:
-        distributed.init_process_group(backend="nccl")
-        device = f"cuda:{ddp_params._local_rank}"
-        torch.cuda.set_device(device)
-        model._device = device
-        model.to(device)
-    else:
-        ddp_params = _DDPParams(_rank=0, _local_rank=0, _world_size=1)
-
     is_master_process = ddp_params._local_rank == 0
-
     model_forward_ctx = nullcontext() if device_type == "cpu" else torch.autocast(device_type=device_type, dtype=tdtype)
-
-    # Update torch settings
-    manual_seed = 42 + ddp_params._rank
-    random.seed(manual_seed)
-    torch.manual_seed(manual_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(manual_seed)
-
-    torch.set_float32_matmul_precision("high")
 
     n_total = 0
     n_correct = 0
@@ -115,28 +96,53 @@ def evaluate(model: Model) -> None:
         n_total = n_total_tensor.item()
         n_correct = n_correct_tensor.item()
 
+    if is_master_process:
+        progress_bar.close()
+        accuracy = (n_correct * 1.0) / n_total
+        logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}% | n_total={n_total} | n_correct={n_correct}")
+
+
+async def _load_and_evaluate(config: ModelConfig) -> None:
+    device = _get_device()
+
+    ddp_params = _get_ddp_params()
+    is_ddp = ddp_params is not None
+    if is_ddp:
+        distributed.init_process_group(backend="nccl")
+        device = f"cuda:{ddp_params._local_rank}"
+        torch.cuda.set_device(device)
+    else:
+        ddp_params = _DDPParams(_rank=0, _local_rank=0, _world_size=1)
+
+    if ddp_params._local_rank != 0:
+        _set_logging_level(logging.WARNING)
+
+    # Update torch settings
+    manual_seed = 42 + ddp_params._rank
+    random.seed(manual_seed)
+    torch.manual_seed(manual_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(manual_seed)
+
+    torch.set_float32_matmul_precision("high")
+
+    model = await Model.load(config=config, device=device)
+    evaluate(model, is_ddp, ddp_params)
+
     if is_ddp:
         distributed.destroy_process_group()
 
-    if is_master_process:
-        progress_bar.close()
-        accuracy = n_correct / n_total
-        logger.info(f"HellaSwag: accuracy={(accuracy * 100.0):.4f}%")
-
 
 async def _custom_trained(dir_path: str | None = None) -> None:
-    model = await Model.load(CustomTrainedModelConfig(dir_path=dir_path))
-    evaluate(model)
+    await _load_and_evaluate(CustomTrainedModelConfig(dir_path=dir_path))
 
 
 async def _pretrained() -> None:
-    model = await Model.load(PretrainedModelConfig())
-    evaluate(model)
+    await _load_and_evaluate(PretrainedModelConfig())
 
 
 async def _pretrained_gpt2(model_type: PretrainedGPT2ModelType) -> None:
-    model = await Model.load(PretrainedGPT2ModelConfig(model_type=model_type))
-    evaluate(model)
+    await _load_and_evaluate(PretrainedGPT2ModelConfig(model_type=model_type))
 
 
 @app.command(name="custom-trained")
