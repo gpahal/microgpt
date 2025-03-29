@@ -4,9 +4,9 @@ import shutil
 
 import torch
 
+from microgpt import CustomTrainedModelConfig, Model
 from microgpt.common.device import _get_device
 from microgpt.common.logger import _new_logger
-from microgpt.model.model import CustomTrainedModelConfig, Model
 
 logger = _new_logger(__name__)
 
@@ -24,8 +24,9 @@ async def main() -> None:
     output_dir_path = os.path.join(trained_model_dir_path, "output")
     os.makedirs(output_dir_path, exist_ok=True)
 
-    model: Model | None = None
+    model_weights: dict[str, torch.Tensor] = {}
     device = _get_device()
+    total_runs = len(run_ints)
     for run_idx, run in enumerate(run_ints):
         run_output_dir_path = os.path.join(trained_model_dir_path, f"run_{run}/output")
         assert os.path.exists(run_output_dir_path), f"Trained model directory not found: {run_output_dir_path}"
@@ -68,27 +69,33 @@ async def main() -> None:
         run_model_weights: dict[str, torch.Tensor] = torch.load(
             os.path.join(run_output_dir_path, "model.pt"), map_location=device, weights_only=True
         )
-        if model is None:
-            model = await Model.load(config=CustomTrainedModelConfig(dir_path=run_output_dir_path), device=device)
+        if run_idx == 0:
+            for key, value in run_model_weights.items():
+                model_weights[key] = value / (total_runs * 1.0)
         else:
-            model_weights = model.state_dict()
-            assert len(model_weights) == len(run_model_weights), (
-                f"Model weights must have the same length: {len(model_weights)} != {len(run_model_weights)}"
-            )
+            assert len(model_weights) == len(run_model_weights), "Model weights must have the same length"
             for key, value in run_model_weights.items():
                 assert key in model_weights, f"Key {key} not found in model weights"
                 assert model_weights[key].shape == value.shape, (
                     f"Shape mismatch for key {key}: {model_weights[key].shape} != {value.shape}"
                 )
-                model_weights[key] += value
-            model.load_state_dict(model_weights)
+                model_weights[key] += value / (total_runs * 1.0)
 
-    model_weights = model.state_dict()
+    model_weights_file_path = os.path.join(output_dir_path, "model.pt")
+    torch.save(model_weights, model_weights_file_path)
+    model = await Model.load(config=CustomTrainedModelConfig(dir_path=output_dir_path), device=device)
+    shutil.move(os.path.join(output_dir_path, "model.pt"), os.path.join(output_dir_path, "model1.pt"))
+    new_model_weights = model.state_dict()
     for key, value in model_weights.items():
-        model_weights[key] = value / len(run_ints)
-    model.load_state_dict(model_weights)
-
-    torch.save(model.state_dict(), os.path.join(output_dir_path, "model.pt"))
+        assert key in new_model_weights, f"Key {key} not found in new model weights"
+        assert new_model_weights[key].shape == value.shape, (
+            f"Shape mismatch for key {key}: {new_model_weights[key].shape} != {value.shape}"
+        )
+        assert new_model_weights[key].dtype == value.dtype, (
+            f"Dtype mismatch for key {key}: {new_model_weights[key].dtype} != {value.dtype}"
+        )
+        assert torch.equal(new_model_weights[key], value), f"Values for key {key} are not equal"
+    torch.save(new_model_weights, os.path.join(output_dir_path, "model.pt"))
 
 
 if __name__ == "__main__":

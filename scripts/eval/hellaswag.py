@@ -95,16 +95,17 @@ def evaluate(model: Model) -> None:
         n_total += 1
         n_correct += int(pred_norm == label)
 
-        if is_master_process and n_total <= 3:
-            print("---")
-            print(f"Context:\n{example['ctx']}")
-            print("Endings:")
-            for i, end in enumerate(example["endings"]):
-                print(f"{i} (loss: {avg_loss[i].item():.4f}) {end}")
-            print(f"Predicted: {pred_norm}, actual: {label}")
-
         if is_master_process:
             progress_bar.update(1)
+
+        if is_master_process:
+            if n_total <= 3:
+                print("---")
+                print(f"Context:\n{example['ctx']}")
+                print("Endings:")
+                for i, end in enumerate(example["endings"]):
+                    print(f"{i} (loss: {avg_loss[i].item():.4f}) {end}")
+                print(f"Predicted: {pred_norm}, actual: {label}")
 
     if is_ddp:
         n_total_tensor = torch.tensor(n_total, dtype=torch.long, device=device)
