@@ -1,0 +1,108 @@
+[project]
+name = "microgpt"
+version = "0.0.1"
+description = "A simple and small GPT-like model. Includes code for tokenization, training, and inference."
+readme = "README.md"
+authors = [{ name = "Garvit Pahal", email = "g10pahal@gmail.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "aiohttp>=3.12.14",
+    "blobfile>=3.0.0",
+    "datasets>=4.0.0",
+    "huggingface-hub>=0.33.4",
+    "matplotlib>=3.10.3",
+    "numpy>=2.3.1",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+    "regex>=2024.11.6",
+    "tiktoken>=0.9.0",
+    "torch>=2.7.1",
+    "tqdm>=4.67.1",
+    "transformers>=4.53.3",
+    "typer>=0.16.0",
+]
+
+[project.urls]
+homepage = "https://github.com/gpahal/microgpt"
+source = "https://github.com/gpahal/microgpt"
+documentation = "https://github.com/gpahal/microgpt/blob/main/README.md"
+issues = "https://github.com/gpahal/microgpt/issues"
+
+[dependency-groups]
+dev = [
+    "jupyterlab>=4.4.5",
+    "mypy>=1.17.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.4",
+    "types-aiofiles>=24.1.0.20250708",
+    "types-regex>=2024.11.6.20250403",
+    "types-tqdm>=4.67.0.20250516",
+]
+
+[tool.uv.workspace]
+members = ["microgpt"]
+
+[tool.uv.sources]
+microgpt = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/microgpt"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG001", # unused arguments in functions
+]
+isort = { combine-as-imports = true, known-first-party = ["microgpt"] }
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = [".venv"]
+
+[tool.coverage.run]
+source = ["tests", "src/microgpt"]
+
+[tool.coverage.report]
+show_missing = true
+sort = "-Cover"
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@abc.abstractmethod",
+    "raise NotImplementedError",
+    "logger.debug",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report html:.coverage_html"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%H:%M:%S"
